@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>URL Shortener</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>URL Shortener</h1>
+
+<div class="input-row">
+<input id="urlInput" placeholder="Enter long URL">
+
+<input id="customCode" placeholder="Custom short code (optional)">
+
+<input id="expiryDays" type="number" placeholder="Expire after days (optional)">
+</div>
+
+<div class="buttons">
+<button type="button" onclick="shorten()">Shorten</button>
+<button id="copyBtn" onclick="copyLink('${shortUrl}')">Copy</button>
+<button type="button" class="clear-btn" onclick="clearFields()">Clear</button>
+</div>
+
+<p id="result"></p>
+
+<img id="qrCode" width="150">
+
+<br><br>
+
+<a href="/admin.html">
+<button class="dashboard-btn">Open Dashboard</button>
+</a>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
