@@ -1,3 +1,5 @@
+const BASE_URL = ""; // same-origin
+
 async function shorten() {
 
   try {
@@ -6,7 +8,7 @@ async function shorten() {
     const customCode = document.getElementById("customCode").value;
     const expiryDays = document.getElementById("expiryDays").value;
 
-    const res = await fetch("/shorten", {
+    const res = await fetch(`${BASE_URL}/shorten`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -21,8 +23,10 @@ async function shorten() {
       return;
     }
 
-    const shortUrl = data.shortUrl;
-document.getElementById("result").innerHTML =
+    // ✅ ONLY CHANGE: make full URL from relative
+    const shortUrl = window.location.origin + data.shortUrl;
+
+    document.getElementById("result").innerHTML =
 `Short URL: 
 <a href="${shortUrl}" target="_blank">${shortUrl}</a>
 <button id="copyBtn" class="copy-btn" onclick="copyLink('${shortUrl}')">
@@ -64,7 +68,6 @@ btn.style.color = "white";
 },2000);
 
 }
-
 
 function clearFields(){
 

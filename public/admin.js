@@ -6,13 +6,15 @@ const searchInput = document.getElementById("searchInput");
 const sortClicks = document.getElementById("sortClicks");
 const loading = document.getElementById("loadingSpinner");
 
+const BASE_URL = ""; // same-origin
+
 /* ---------- LOAD DATA ---------- */
 
 async function loadData(){
 
 if(loading) loading.style.display = "block";
 
-const res = await fetch("/admin");
+const res = await fetch(`${BASE_URL}/admin`);
 const data = await res.json();
 
 globalData = data;
@@ -100,7 +102,14 @@ tableBody.appendChild(row);
 
 async function deleteLink(code){
 
-await fetch("/delete/"+code,{
+// ✅ CONFIRMATION ALERT
+const confirmDelete = confirm("Are you sure you want to delete this link?");
+
+if(!confirmDelete){
+return; // stop if user cancels
+}
+
+await fetch(`/delete/${code}`,{
 method:"DELETE"
 });
 

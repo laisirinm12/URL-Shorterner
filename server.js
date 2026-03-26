@@ -1,191 +1,133 @@
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
 
 const app = express();
 
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
 
-const urlsFile = "urls.json";
+const urlsFile = path.join(__dirname, "urls.json");
 
-function readUrlStore() {
+/* ---------- READ / WRITE ---------- */
+
+function readData() {
     try {
-        const raw = fs.readFileSync(urlsFile, "utf8").trim();
-        return raw ? JSON.parse(raw) : {};
-    } catch (error) {
+        const data = fs.readFileSync(urlsFile, "utf8");
+        return data ? JSON.parse(data) : {};
+    } catch {
         return {};
     }
 }
 
-function writeUrlStore(data) {
+function writeData(data) {
     fs.writeFileSync(urlsFile, JSON.stringify(data, null, 2));
 }
 
-/* ---------- CLEAN EXPIRED LINKS ---------- */
+/* ---------- CLEANUP ---------- */
 
-function cleanExpiredLinks(){
+function cleanExpired() {
+    const data = readData();
+    let changed = false;
 
-const data = readUrlStore();
+    for (const code in data) {
+        if (data[code].expiresAt && Date.now() > data[code].expiresAt) {
+            delete data[code];
+            changed = true;
+        }
+    }
 
-let changed = false;
-
-for(const code in data){
-
-if(data[code].expiresAt && Date.now() > data[code].expiresAt){
-
-delete data[code];
-changed = true;
-
+    if (changed) writeData(data);
 }
 
-}
+setInterval(cleanExpired, 60000);
 
-if(changed){
-writeUrlStore(data);
-}
+/* ---------- SHORTEN ---------- */
 
-}
+app.post("/shorten", (req, res) => {
 
-/* run cleanup every minute */
+    const { url, customCode, expiryDays } = req.body;
 
-setInterval(cleanExpiredLinks,60000);
+    if (!url) {
+        return res.status(400).json({ error: "URL required" });
+    }
 
-/* ---------- GENERATE SHORT CODE ---------- */
+    const data = readData();
 
-function generateCode(){
+    let code = customCode || Math.random().toString(36).substring(2, 8);
 
-const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    if (data[code]) {
+        return res.status(400).json({ error: "Code already exists" });
+    }
 
-let code = "";
+    let expiresAt = null;
 
-for(let i = 0; i < 6; i++){
+    if (expiryDays) {
+        expiresAt = Date.now() + expiryDays * 86400000;
+    }
 
-code += chars[Math.floor(Math.random() * chars.length)];
+    data[code] = {
+        url,
+        clicks: 0,
+        expiresAt
+    };
 
-}
+    writeData(data);
 
-return code;
-
-}
-
-/* ---------- CREATE SHORT LINK ---------- */
-
-app.post("/shorten",(req,res)=>{
-
-const { url, customCode, expiryDays } = req.body;
-
-if(!url){
-return res.status(400).json({error:"URL is required"});
-}
-
-const data = readUrlStore();
-
-let code;
-
-if(customCode){
-
-if(data[customCode]){
-return res.status(400).json({error:"Short code already exists"});
-}
-
-code = customCode;
-
-}else{
-
-do{
-code = generateCode();
-}while(data[code]);
-
-}
-
-/* expiration calculation */
-
-let expiresAt = null;
-
-if(expiryDays && Number(expiryDays) > 0){
-expiresAt = Date.now() + (Number(expiryDays) * 24 * 60 * 60 * 1000);
-}
-
-/* store link */
-
-data[code] = {
-url: url,
-clicks: 0,
-expiresAt: expiresAt
-};
-
-writeUrlStore(data);
-
-res.json({
-shortUrl: "http://localhost:3000/" + code
+    res.json({
+        shortUrl: `/r/${code}`   // ✅ important (relative)
+    });
 });
 
+/* ---------- ADMIN ---------- */
+
+app.get("/admin", (req, res) => {
+    cleanExpired();
+    res.json(readData());
 });
 
-/* ---------- ADMIN DASHBOARD DATA ---------- */
+/* ---------- DELETE ---------- */
 
-app.get("/admin",(req,res)=>{
+app.delete("/delete/:code", (req, res) => {
+    const data = readData();
 
-cleanExpiredLinks();
+    if (!data[req.params.code]) {
+        return res.status(404).json({ error: "Not found" });
+    }
 
-const data = readUrlStore();
+    delete data[req.params.code];
+    writeData(data);
 
-res.json(data);
-
+    res.json({ success: true });
 });
 
-/* ---------- DELETE LINK ---------- */
+/* ---------- REDIRECT ---------- */
 
-app.delete("/delete/:code",(req,res)=>{
+app.get("/r/:code", (req, res) => {
 
-const code = req.params.code;
+    cleanExpired();
 
-const data = readUrlStore();
+    const data = readData();
+    const entry = data[req.params.code];
 
-if(!data[code]){
-return res.status(404).json({error:"Link not found"});
-}
+    if (!entry) {
+        return res.send("Link not found");
+    }
 
-delete data[code];
+    entry.clicks++;
+    writeData(data);
 
-writeUrlStore(data);
-
-res.json({message:"Deleted successfully"});
-
+    res.redirect(entry.url);
 });
 
-/* ---------- REDIRECT SHORT LINK ---------- */
+/* ---------- ROOT ---------- */
 
-app.get("/:code",(req,res)=>{
-
-cleanExpiredLinks();
-
-const code = req.params.code;
-
-const data = readUrlStore();
-
-const entry = data[code];
-
-if(entry){
-
-entry.clicks += 1;
-
-writeUrlStore(data);
-
-res.redirect(entry.url);
-
-}else{
-
-res.send("URL not found or expired");
-
-}
-
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-/* ---------- SERVER START ---------- */
+/* ---------- START ---------- */
 
-const PORT = 3000;
-
-app.listen(PORT,()=>{
-console.log("Server running on port "+PORT);
+app.listen(3000, () => {
+    console.log("Server running on http://localhost:3000");
 });
